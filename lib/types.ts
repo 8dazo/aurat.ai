@@ -26,10 +26,22 @@ export interface TextClip extends BaseClip {
 
 export type Clip = MediaClip | TextClip;
 
+export interface ZoomEffect {
+    id: string;
+    start: number;
+    duration: number;
+    level: number; // Scale factor
+    rect: { x: number; y: number; width: number; height: number }; // Relative 0-1
+}
+
+
 export interface TimelineState {
     clips: Clip[];
+    zoomEffects: ZoomEffect[];
     currentTime: number;
     duration: number;
     isPlaying: boolean;
     selectedClipId: string | null;
+    selectedZoomEffectId: string | null;
 }
+

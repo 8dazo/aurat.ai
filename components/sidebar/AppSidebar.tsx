@@ -7,8 +7,10 @@ import {
     Type,
     Search,
     Plus,
-    ChevronLeft
+    ChevronLeft,
+    ZoomIn
 } from 'lucide-react';
+
 import { useDispatch, useSelector } from 'react-redux';
 import { RootState } from '@/store/redux/store';
 import { setActiveTab } from '@/store/redux/slices/sidebarSlice';
@@ -25,13 +27,17 @@ import {
 import { PropertiesSidebar } from './PropertiesSidebar';
 import { FramesSidebar } from './FramesSidebar';
 import { TextSidebar } from './TextSidebar';
+import { ZoomSidebar } from './ZoomSidebar';
 import { cn } from '@/lib/utils';
+
 
 const navItems = [
     { id: 'properties', icon: Settings2, label: 'Properties' },
     { id: 'frames', icon: Layout, label: 'Frames' },
     { id: 'text', icon: Type, label: 'Text' },
+    { id: 'zoom', icon: ZoomIn, label: 'Zoom' },
 ];
+
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     const dispatch = useDispatch();
@@ -46,7 +52,10 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 return FramesSidebar;
             case 'text':
                 return TextSidebar;
+            case 'zoom':
+                return ZoomSidebar;
             default:
+
                 return PropertiesSidebar;
         }
     }, [activeTab]);

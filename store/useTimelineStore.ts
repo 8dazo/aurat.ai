@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { Clip, TimelineState } from '../lib/types';
+import { Clip, TimelineState, ZoomEffect } from '../lib/types';
 
 interface TimelineActions {
     addClip: (clip: Clip) => void;
@@ -10,7 +10,12 @@ interface TimelineActions {
     setIsPlaying: (isPlaying: boolean) => void;
     setSelectedClipId: (id: string | null) => void;
     setDuration: (duration: number) => void;
+    addZoomEffect: (effect: ZoomEffect) => void;
+    removeZoomEffect: (id: string) => void;
+    updateZoomEffect: (id: string, updates: Partial<ZoomEffect>) => void;
+    setSelectedZoomEffectId: (id: string | null) => void;
 }
+
 
 export const useTimelineStore = create<TimelineState & TimelineActions>((set) => ({
     clips: [],
@@ -18,6 +23,9 @@ export const useTimelineStore = create<TimelineState & TimelineActions>((set) =>
     duration: 0,
     isPlaying: false,
     selectedClipId: null,
+    zoomEffects: [],
+    selectedZoomEffectId: null,
+
 
     addClip: (clip) =>
         set((state) => ({
@@ -40,4 +48,22 @@ export const useTimelineStore = create<TimelineState & TimelineActions>((set) =>
     setIsPlaying: (isPlaying) => set({ isPlaying }),
     setSelectedClipId: (selectedClipId) => set({ selectedClipId }),
     setDuration: (duration) => set({ duration }),
+
+    addZoomEffect: (effect) =>
+        set((state) => ({
+            zoomEffects: [...state.zoomEffects, effect].sort((a, b) => a.start - b.start),
+        })),
+
+    removeZoomEffect: (id) =>
+        set((state) => ({
+            zoomEffects: state.zoomEffects.filter((e) => e.id !== id),
+        })),
+
+    updateZoomEffect: (id, updates) =>
+        set((state) => ({
+            zoomEffects: state.zoomEffects.map((e) => (e.id === id ? { ...e, ...updates } : e)),
+        })),
+
+    setSelectedZoomEffectId: (selectedZoomEffectId) => set({ selectedZoomEffectId }),
 }));
+

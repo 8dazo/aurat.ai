@@ -14,17 +14,37 @@ export const PreviewCanvas = () => {
     const isPlaying = useTimelineStore((state) => state.isPlaying);
     const setIsPlaying = useTimelineStore((state) => state.setIsPlaying);
     const setDuration = useTimelineStore((state) => state.setDuration);
+    const zoomEffects = useTimelineStore((state) => state.zoomEffects);
+
 
     // Initialize Etro Movie
     useEffect(() => {
-        if (canvasRef.current && clips.length > 0) {
-            movieRef.current = createEtroMovie(canvasRef.current, clips);
+        if (canvasRef.current && (clips.length > 0 || zoomEffects.length > 0)) {
+            if (movieRef.current) {
+                movieRef.current.pause();
+                movieRef.current = null;
+            }
+
+            movieRef.current = createEtroMovie(canvasRef.current, clips, zoomEffects);
+            movieRef.current.currentTime = currentTime;
+            if (isPlaying) {
+                movieRef.current.play();
+            }
 
             // Update store duration
             const totalDuration = clips.reduce((acc, clip) => Math.max(acc, clip.start + clip.duration), 0);
             setDuration(totalDuration);
         }
-    }, [clips, setDuration]);
+
+
+        return () => {
+            if (movieRef.current) {
+                movieRef.current.pause();
+            }
+        };
+    }, [clips, setDuration]); // Removed zoomEffects dependency
+
+
 
     // Handle Playback State
     useEffect(() => {
@@ -42,6 +62,15 @@ export const PreviewCanvas = () => {
         if (!movieRef.current || isPlaying) return;
         movieRef.current.currentTime = currentTime;
     }, [currentTime, isPlaying]);
+
+    // Force redraw when zoom effects change while paused
+    useEffect(() => {
+        if (!movieRef.current || isPlaying) return;
+        // Pulse the time to trigger Etro's refresh logic
+        const t = movieRef.current.currentTime;
+        movieRef.current.currentTime = t;
+    }, [zoomEffects, isPlaying]);
+
 
     // Update store time during playback
     useEffect(() => {

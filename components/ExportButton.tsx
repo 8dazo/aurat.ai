@@ -7,7 +7,9 @@ import { Download, Loader2 } from 'lucide-react';
 
 export const ExportButton = () => {
     const clips = useTimelineStore((state) => state.clips);
+    const zoomEffects = useTimelineStore((state) => state.zoomEffects);
     const [isExporting, setIsExporting] = useState(false);
+
     const [progress, setProgress] = useState(0);
 
     const handleExport = async () => {
@@ -17,8 +19,9 @@ export const ExportButton = () => {
         setProgress(0);
 
         try {
-            const blob = await exportVideo(clips, (p) => setProgress(p));
+            const blob = await exportVideo(clips, zoomEffects, (p) => setProgress(p));
             const url = URL.createObjectURL(blob);
+
             const a = document.createElement('a');
             a.href = url;
             a.download = `video-export-${new Date().getTime()}.mp4`;
@@ -41,8 +44,8 @@ export const ExportButton = () => {
                 onClick={handleExport}
                 disabled={isExporting || clips.length === 0}
                 className={`flex items-center gap-2 px-6 py-2.5 rounded-lg font-semibold transition-all shadow-lg ${isExporting || clips.length === 0
-                        ? 'bg-white/10 text-white/40 cursor-not-allowed border border-white/5'
-                        : 'bg-indigo-600 hover:bg-indigo-500 text-white border border-indigo-400/50 hover:shadow-indigo-500/30'
+                    ? 'bg-white/10 text-white/40 cursor-not-allowed border border-white/5'
+                    : 'bg-indigo-600 hover:bg-indigo-500 text-white border border-indigo-400/50 hover:shadow-indigo-500/30'
                     }`}
             >
                 {isExporting ? (
