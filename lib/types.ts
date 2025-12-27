@@ -13,6 +13,8 @@ export interface MediaClip extends BaseClip {
     file: File;
     url: string;
     name: string;
+    width?: number;
+    height?: number;
 }
 
 export interface TextClip extends BaseClip {
@@ -56,5 +58,6 @@ export interface TimelineState {
     selectedZoomEffectId: string | null;
     timelineScale: number; // pixels per second
     timelineHeight: number;
+    movieDimensions: { width: number; height: number };
 }
 

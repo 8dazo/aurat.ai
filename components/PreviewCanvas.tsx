@@ -15,6 +15,7 @@ export const PreviewCanvas = () => {
     const setIsPlaying = useTimelineStore((state) => state.setIsPlaying);
     const setDuration = useTimelineStore((state) => state.setDuration);
     const zoomEffects = useTimelineStore((state) => state.zoomEffects);
+    const movieDimensions = useTimelineStore((state) => state.movieDimensions);
 
 
     // Initialize Etro Movie
@@ -25,7 +26,7 @@ export const PreviewCanvas = () => {
                 movieRef.current = null;
             }
 
-            movieRef.current = createEtroMovie(canvasRef.current, clips, zoomEffects);
+            movieRef.current = createEtroMovie(canvasRef.current, clips, zoomEffects, movieDimensions);
             movieRef.current.currentTime = currentTime;
             if (isPlaying) {
                 movieRef.current.play();
@@ -42,7 +43,7 @@ export const PreviewCanvas = () => {
                 movieRef.current.pause();
             }
         };
-    }, [clips, setDuration]); // Removed zoomEffects dependency
+    }, [clips, setDuration, movieDimensions]); // Added movieDimensions dependency
 
 
 
@@ -93,13 +94,20 @@ export const PreviewCanvas = () => {
 
     const togglePlay = () => setIsPlaying(!isPlaying);
 
+    const aspectStyle = {
+        aspectRatio: `${movieDimensions.width} / ${movieDimensions.height}`
+    };
+
     return (
         <div className="flex flex-col items-center justify-center w-full h-full min-h-0 relative group">
-            <div className="relative aspect-video max-h-full w-auto bg-black/40 backdrop-blur-sm rounded-2xl border border-white/5 shadow-2xl overflow-hidden">
+            <div
+                className="relative max-h-full w-auto bg-black/40 backdrop-blur-sm rounded-2xl border border-white/5 shadow-2xl overflow-hidden"
+                style={aspectStyle}
+            >
                 <canvas
                     ref={canvasRef}
-                    width={1280}
-                    height={720}
+                    width={movieDimensions.width}
+                    height={movieDimensions.height}
                     className="w-full h-full object-contain cursor-pointer"
                     onClick={togglePlay}
                 />

@@ -8,41 +8,73 @@ export const UploadZone = () => {
     const addClip = useTimelineStore((state) => state.addClip);
     const setSelectedClipId = useTimelineStore((state) => state.setSelectedClipId);
 
+    const setMovieDimensions = useTimelineStore((state) => state.setMovieDimensions);
+
     const onFileChange = useCallback(
         async (e: React.ChangeEvent<HTMLInputElement>) => {
             const files = e.target.files;
             if (!files) return;
+
+            const currentClips = useTimelineStore.getState().clips;
 
             for (let i = 0; i < files.length; i++) {
                 const file = files[i];
                 const url = URL.createObjectURL(file);
                 const type = file.type.startsWith('video') ? 'video' : file.type.startsWith('audio') ? 'audio' : 'image';
 
-                // Get duration for video/audio
+                // Get duration and dimensions
                 let duration = 5; // Default for images
-                if (type !== 'image') {
-                    duration = await new Promise((resolve) => {
+                let width = 0;
+                let height = 0;
+
+                if (type === 'video' || type === 'audio') {
+                    const result = await new Promise<{ duration: number; width: number; height: number }>((resolve) => {
                         const el = document.createElement(type === 'video' ? 'video' : 'audio');
                         el.src = url;
-                        el.onloadedmetadata = () => resolve(el.duration);
+                        el.onloadedmetadata = () => {
+                            resolve({
+                                duration: el.duration,
+                                width: (el as HTMLVideoElement).videoWidth || 0,
+                                height: (el as HTMLVideoElement).videoHeight || 0
+                            });
+                        };
                     });
+                    duration = result.duration;
+                    width = result.width;
+                    height = result.height;
+                } else if (type === 'image') {
+                    const result = await new Promise<{ width: number; height: number }>((resolve) => {
+                        const img = new Image();
+                        img.onload = () => resolve({ width: img.width, height: img.height });
+                        img.src = url;
+                    });
+                    width = result.width;
+                    height = result.height;
+                }
+
+                // If this is the first video/image, set the project dimensions
+                if (currentClips.length === 0 && (type === 'video' || type === 'image') && width > 0 && height > 0) {
+                    setMovieDimensions({ width, height });
                 }
 
                 const newClipId = crypto.randomUUID();
                 addClip({
                     id: newClipId,
                     type: type as any,
+                    trackId: '', // Will be assigned by store
                     start: 0,
                     duration,
                     startTimeInFile: 0,
                     file,
                     url,
                     name: file.name,
+                    width: width || undefined,
+                    height: height || undefined,
                 });
                 setSelectedClipId(newClipId);
             }
         },
-        [addClip, setSelectedClipId]
+        [addClip, setSelectedClipId, setMovieDimensions]
     );
 
     return (

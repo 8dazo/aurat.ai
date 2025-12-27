@@ -13,6 +13,7 @@ export const ZoomSidebar = () => {
     const setSelectedZoomEffectId = useTimelineStore((state) => state.setSelectedZoomEffectId);
     const clips = useTimelineStore((state) => state.clips);
     const currentTime = useTimelineStore((state) => state.currentTime);
+    const movieDimensions = useTimelineStore((state) => state.movieDimensions);
 
     const selectedEffect = zoomEffects.find((e) => e.id === selectedZoomEffectId);
 
@@ -36,11 +37,13 @@ export const ZoomSidebar = () => {
             };
             video.onseeked = () => {
                 const buffer = document.createElement('canvas');
-                buffer.width = 320;
-                buffer.height = 180;
+                // Use movie permissions instead of hardcoded 16:9
+                const scale = Math.min(320 / movieDimensions.width, 180 / movieDimensions.height);
+                buffer.width = movieDimensions.width * scale;
+                buffer.height = movieDimensions.height * scale;
                 const bctx = buffer.getContext('2d');
                 if (bctx) {
-                    bctx.drawImage(video, 0, 0, 320, 180);
+                    bctx.drawImage(video, 0, 0, buffer.width, buffer.height);
                     setPreviewBuffer(buffer);
                 }
             };
@@ -51,7 +54,7 @@ export const ZoomSidebar = () => {
         } else {
             setPreviewBuffer(null);
         }
-    }, [selectedEffect?.id, selectedEffect?.start, clips]);
+    }, [selectedEffect?.id, selectedEffect?.start, clips, movieDimensions]);
 
     // Effect to render the canvas (background frame + overlay)
     useEffect(() => {
@@ -131,7 +134,9 @@ export const ZoomSidebar = () => {
         const my = (e.clientY - rect.top) / rect.height;
 
         if (dragMode === 'resize') {
-            // On a 16:9 canvas, a 16:9 rect has uniform relative w and h (w=h)
+            // Relative width and height are now independent but we want to maintain aspect ratio
+            // Since our canvas has the same aspect ratio as the movie, 
+            // a relative width of 'w' and relative height of 'w' will have the movie's aspect ratio.
             const newSide = Math.max(0.1, Math.min(1 - selectedEffect.rect.x, 1 - selectedEffect.rect.y, mx - selectedEffect.rect.x, my - selectedEffect.rect.y));
 
             updateZoomEffect(selectedEffect.id, {
@@ -152,6 +157,10 @@ export const ZoomSidebar = () => {
     const handleMouseUp = () => {
         setIsDragging(false);
         setDragMode(null);
+    };
+
+    const sidebarCanvasAspect = {
+        aspectRatio: `${movieDimensions.width} / ${movieDimensions.height}`
     };
 
     return (
@@ -178,11 +187,14 @@ export const ZoomSidebar = () => {
                     <label className="text-xs font-medium text-muted-foreground flex items-center gap-2">
                         <Maximize className="w-3.5 h-3.5" /> Area Selection
                     </label>
-                    <div className="relative aspect-video bg-black rounded-lg overflow-hidden border border-sidebar-border">
+                    <div
+                        className="relative bg-black rounded-lg overflow-hidden border border-sidebar-border"
+                        style={sidebarCanvasAspect}
+                    >
                         <canvas
                             ref={canvasRef}
                             width={320}
-                            height={180}
+                            height={320 * (movieDimensions.height / movieDimensions.width)}
                             className="w-full h-full cursor-crosshair"
                             onMouseDown={handleMouseDown}
                             onMouseMove={handleMouseMove}

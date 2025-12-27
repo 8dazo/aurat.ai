@@ -4,9 +4,13 @@ import { useTimelineStore } from '../store/useTimelineStore';
 
 
 
-export const createEtroMovie = (canvas: HTMLCanvasElement, clips: Clip[], zoomEffects: ZoomEffect[]) => {
+export const createEtroMovie = (canvas: HTMLCanvasElement, clips: Clip[], zoomEffects: ZoomEffect[], movieDimensions: { width: number; height: number }) => {
 
-    const movie = new etro.Movie({ canvas });
+    const movie = new etro.Movie({
+        canvas,
+    });
+    movie.width = movieDimensions.width;
+    movie.height = movieDimensions.height;
 
     clips.forEach((clip) => {
         if (clip.type === 'video' || clip.type === 'audio' || clip.type === 'image') {
@@ -19,6 +23,8 @@ export const createEtroMovie = (canvas: HTMLCanvasElement, clips: Clip[], zoomEf
                     duration: clip.duration,
                     source: mediaClip.url,
                     sourceStartTime: clip.startTimeInFile,
+                    width: movieDimensions.width,
+                    height: movieDimensions.height,
                 });
             } else if (clip.type === 'audio') {
                 layer = new etro.layer.Audio({
@@ -32,6 +38,8 @@ export const createEtroMovie = (canvas: HTMLCanvasElement, clips: Clip[], zoomEf
                     startTime: clip.start,
                     duration: clip.duration,
                     source: mediaClip.url,
+                    width: movieDimensions.width,
+                    height: movieDimensions.height,
                 });
             }
 
@@ -44,8 +52,8 @@ export const createEtroMovie = (canvas: HTMLCanvasElement, clips: Clip[], zoomEf
                 startTime: textClip.start,
                 duration: textClip.duration,
                 text: textClip.text,
-                x: textClip.style.position.x,
-                y: textClip.style.position.y,
+                x: textClip.style.position.x * movieDimensions.width,
+                y: textClip.style.position.y * movieDimensions.height,
                 fontSize: textClip.style.fontSize,
                 fontFamily: textClip.style.fontFamily,
                 color: textClip.style.color as any,
@@ -105,8 +113,8 @@ export const createEtroMovie = (canvas: HTMLCanvasElement, clips: Clip[], zoomEf
             const scaleX = 1 / sw;
             const scaleY = 1 / sh;
 
-            const width = element.width || movie.width || 1280;
-            const height = element.height || movie.height || 720;
+            const width = movieDimensions.width;
+            const height = movieDimensions.height;
 
             matrix.translate(-x * width, -y * height);
             matrix.scale(scaleX, scaleY);

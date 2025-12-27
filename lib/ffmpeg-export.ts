@@ -29,6 +29,10 @@ export const exportVideo = async (
     const duration = clips.reduce((acc, clip) => Math.max(acc, clip.start + clip.duration), 0);
     if (duration === 0) throw new Error("Nothing to export");
 
+    // Get movie dimensions from state
+    const { movieDimensions } = (window as any).useTimelineStore.getState();
+    const { width: projectWidth, height: projectHeight } = movieDimensions;
+
     onProgress(5);
 
     // 1. Write all media files to ffmpeg FS
@@ -54,14 +58,14 @@ export const exportVideo = async (
 
     // 2. Build filter complex
     // Start with black base
-    let filterComplex = `color=c=black:s=1920x1080:d=${duration}[base];`;
+    let filterComplex = `color=c=black:s=${projectWidth}x${projectHeight}:d=${duration}[base];`;
     let lastStream = '[base]';
 
     // Composition: Media Overlays
     mediaClips.forEach((clip, i) => {
         const streamName = `v${i}`;
         const outName = `ovv${i}`;
-        filterComplex += `[${i + 1}:v]scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2[${streamName}];`;
+        filterComplex += `[${i + 1}:v]scale=${projectWidth}:${projectHeight}:force_original_aspect_ratio=decrease,pad=${projectWidth}:${projectHeight}:(ow-iw)/2:(oh-ih)/2[${streamName}];`;
         filterComplex += `${lastStream}[${streamName}]overlay=enable='between(t,${clip.start},${clip.start + clip.duration})'[${outName}];`;
         lastStream = `[${outName}]`;
     });
@@ -71,7 +75,10 @@ export const exportVideo = async (
         const outName = `txv${i}`;
         // Map hex color to ffmpeg format if needed (ffmpeg supports hex)
         const color = clip.style.color || 'white';
-        filterComplex += `${lastStream}drawtext=text='${clip.text}':fontfile=roboto.ttf:fontsize=${clip.style.fontSize}:fontcolor=${color}:x=${clip.style.position.x}:y=${clip.style.position.y}:enable='between(t,${clip.start},${clip.start + clip.duration})'[${outName}];`;
+        // Position is relative 0-1
+        const xPos = clip.style.position.x * projectWidth;
+        const yPos = clip.style.position.y * projectHeight;
+        filterComplex += `${lastStream}drawtext=text='${clip.text}':fontfile=roboto.ttf:fontsize=${clip.style.fontSize}:fontcolor=${color}:x=${xPos}:y=${yPos}:enable='between(t,${clip.start},${clip.start + clip.duration})'[${outName}];`;
         lastStream = `[${outName}]`;
     });
 
@@ -106,10 +113,10 @@ export const exportVideo = async (
         if (effect) {
             const { x, y, width: w, height: h } = effect.rect;
             // Native FFmpeg crop
-            zoomFilter += `,crop=${w}*iw:${h}*ih:${x}*iw:${y}*ih,scale=1920:1080`;
+            zoomFilter += `,crop=${w}*iw:${h}*ih:${x}*iw:${y}*ih,scale=${projectWidth}:${projectHeight}`;
         } else {
             // Even if no zoom, we must trim to the correct time segment
-            zoomFilter += `,scale=1920:1080`;
+            zoomFilter += `,scale=${projectWidth}:${projectHeight}`;
         }
 
         filterComplex += `[s${i}]${zoomFilter}[${segName}];`;
@@ -129,7 +136,7 @@ export const exportVideo = async (
     });
 
     await ffmpeg.exec([
-        '-f', 'lavfi', '-i', `color=c=black:s=1920x1080:d=${duration}`,
+        '-f', 'lavfi', '-i', `color=c=black:s=${projectWidth}x${projectHeight}:d=${duration}`,
         ...inputs,
         '-filter_complex', filterComplex,
         '-map', '[vout]',

@@ -24,6 +24,7 @@ interface TimelineActions {
     // Timeline settings
     setTimelineScale: (scale: number) => void;
     setTimelineHeight: (height: number) => void;
+    setMovieDimensions: (dimensions: { width: number; height: number }) => void;
 }
 
 const DEFAULT_TRACKS: Track[] = [
@@ -42,6 +43,7 @@ export const useTimelineStore = create<TimelineState & TimelineActions>((set) =>
     selectedZoomEffectId: null,
     timelineScale: 50, // 50px per second
     timelineHeight: 300,
+    movieDimensions: { width: 1280, height: 720 },
 
     addClip: (clip) =>
         set((state) => {
@@ -101,5 +103,6 @@ export const useTimelineStore = create<TimelineState & TimelineActions>((set) =>
 
     setTimelineScale: (timelineScale) => set({ timelineScale }),
     setTimelineHeight: (timelineHeight) => set({ timelineHeight }),
+    setMovieDimensions: (movieDimensions) => set({ movieDimensions }),
 }));
 
