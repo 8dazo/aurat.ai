@@ -15,12 +15,17 @@
     "@ffmpeg/ffmpeg": "^0.12.15",
     "@ffmpeg/util": "^0.12.2",
     "@radix-ui/react-accordion": "^1.2.12",
+    "@reduxjs/toolkit": "^2.11.2",
     "@types/ffmpeg.js": "^3.1.6",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
     "etro": "^0.12.1",
     "lucide-react": "^0.562.0",
     "next": "16.1.1",
     "react": "19.2.3",
     "react-dom": "19.2.3",
+    "react-redux": "^9.2.0",
+    "tailwind-merge": "^3.4.0",
     "zustand": "^5.0.9"
   },
   "devDependencies": {
