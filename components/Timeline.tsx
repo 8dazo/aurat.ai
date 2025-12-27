@@ -1,81 +1,87 @@
 'use client';
 
-import React from 'react';
-import {
-    DndContext,
-    closestCenter,
-    KeyboardSensor,
-    PointerSensor,
-    useSensor,
-    useSensors,
-    DragEndEvent,
-} from '@dnd-kit/core';
-import {
-    arrayMove,
-    SortableContext,
-    sortableKeyboardCoordinates,
-    horizontalListSortingStrategy,
-} from '@dnd-kit/sortable';
+import React, { useRef, useState } from 'react';
 import { useTimelineStore } from '../store/useTimelineStore';
-import { ClipCard } from './ClipCard';
+import { TrackHeader } from './TrackHeader';
+import { TrackLane } from './TrackLane';
+import { Plus, Maximize2, Minus, Search } from 'lucide-react';
 
 export const Timeline = () => {
+    const tracks = useTimelineStore((state) => state.tracks);
     const clips = useTimelineStore((state) => state.clips);
-    const setClips = useTimelineStore((state) => state.setClips);
-    const addClip = useTimelineStore((state) => state.addClip);
+    const zoomEffects = useTimelineStore((state) => state.zoomEffects);
     const currentTime = useTimelineStore((state) => state.currentTime);
     const setCurrentTime = useTimelineStore((state) => state.setCurrentTime);
     const duration = useTimelineStore((state) => state.duration);
-    const zoomEffects = useTimelineStore((state) => state.zoomEffects);
-    const selectedZoomEffectId = useTimelineStore((state) => state.selectedZoomEffectId);
-    const setSelectedZoomEffectId = useTimelineStore((state) => state.setSelectedZoomEffectId);
+    const timelineScale = useTimelineStore((state) => state.timelineScale);
+    const setTimelineScale = useTimelineStore((state) => state.setTimelineScale);
+    const timelineHeight = useTimelineStore((state) => state.timelineHeight);
+    const setTimelineHeight = useTimelineStore((state) => state.setTimelineHeight);
     const setSelectedClipId = useTimelineStore((state) => state.setSelectedClipId);
+    const setSelectedZoomEffectId = useTimelineStore((state) => state.setSelectedZoomEffectId);
     const addZoomEffect = useTimelineStore((state) => state.addZoomEffect);
 
-
-    const sensors = useSensors(
-        useSensor(PointerSensor),
-        useSensor(KeyboardSensor, {
-            coordinateGetter: sortableKeyboardCoordinates,
-        })
-    );
-
-    const handleDragEnd = (event: DragEndEvent) => {
-        const { active, over } = event;
-
-        if (over && active.id !== over.id) {
-            const oldIndex = clips.findIndex((c) => c.id === active.id);
-            const newIndex = clips.findIndex((c) => c.id === over.id);
-
-            const newClips = arrayMove(clips, oldIndex, newIndex);
-
-            // Update start times based on ordering for MVP
-            let currentPos = 0;
-            const updatedClips = newClips.map((clip) => {
-                const updated = { ...clip, start: currentPos };
-                currentPos += clip.duration;
-                return updated;
-            });
-
-            setClips(updatedClips);
-        }
-    };
+    const scrollContainerRef = useRef<HTMLDivElement>(null);
+    const [isResizingHeight, setIsResizingHeight] = useState(false);
+    const [ghostTime, setGhostTime] = useState<number | null>(null);
+    const [isPanning, setIsPanning] = useState(false);
+    const isPlaying = useTimelineStore((state) => state.isPlaying);
+    const setIsPlaying = useTimelineStore((state) => state.setIsPlaying);
 
     const handleTimelineClick = (e: React.MouseEvent<HTMLDivElement>) => {
+        if (isPanning) return; // Don't jump if we were just panning
         if ((e.target as HTMLElement).closest('.zoom-effect-card') || (e.target as HTMLElement).closest('.clip-card')) return;
 
         const rect = e.currentTarget.getBoundingClientRect();
         const x = e.clientX - rect.left;
-        const time = (x + e.currentTarget.scrollLeft) / 50; // 50px per second
+        const time = (x + e.currentTarget.scrollLeft) / timelineScale;
         setCurrentTime(time);
         setSelectedClipId(null);
         setSelectedZoomEffectId(null);
     };
 
+    const handleTimelineMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+        // Only pan if we click the background (not a clip, zoom, or ruler)
+        if ((e.target as HTMLElement).closest('.zoom-effect-card') || (e.target as HTMLElement).closest('.clip-card')) return;
+
+        // If clicking the ruler part, we probably want to just jump time, or start scrubbing
+        // But the user requested "move left to right and vice versa using the cursor"
+
+        const scrollContainer = scrollContainerRef.current;
+        if (!scrollContainer) return;
+
+        const startX = e.clientX;
+        const startScrollLeft = scrollContainer.scrollLeft;
+        let hasMoved = false;
+
+        const onMouseMove = (moveEvent: MouseEvent) => {
+            const deltaX = moveEvent.clientX - startX;
+            if (Math.abs(deltaX) > 5) {
+                if (!isPanning) setIsPanning(true);
+                hasMoved = true;
+                scrollContainer.scrollLeft = startScrollLeft - deltaX;
+            }
+        };
+
+        const onMouseUp = () => {
+            if (hasMoved) {
+                // Prevent click event if we actually moved
+                setTimeout(() => setIsPanning(false), 50);
+            }
+            window.removeEventListener('mousemove', onMouseMove);
+            window.removeEventListener('mouseup', onMouseUp);
+        };
+
+        window.addEventListener('mousemove', onMouseMove);
+        window.addEventListener('mouseup', onMouseUp);
+    };
+
     const handleAddZoom = () => {
         const id = Math.random().toString(36).substr(2, 9);
+        const zoomTrack = tracks.find(t => t.type === 'zoom') || tracks[0];
         addZoomEffect({
             id,
+            trackId: zoomTrack.id,
             start: currentTime,
             duration: 2,
             level: 1.5,
@@ -84,82 +90,194 @@ export const Timeline = () => {
         setSelectedZoomEffectId(id);
     };
 
+    const handleHeightResize = (e: React.MouseEvent) => {
+        e.preventDefault();
+        setIsResizingHeight(true);
+        const startY = e.clientY;
+        const startHeight = timelineHeight;
+
+        const onMouseMove = (moveEvent: MouseEvent) => {
+            const deltaY = startY - moveEvent.clientY;
+            setTimelineHeight(Math.max(150, Math.min(600, startHeight + deltaY)));
+        };
+
+        const onMouseUp = () => {
+            setIsResizingHeight(false);
+            window.removeEventListener('mousemove', onMouseMove);
+            window.removeEventListener('mouseup', onMouseUp);
+        };
+
+        window.addEventListener('mousemove', onMouseMove);
+        window.addEventListener('mouseup', onMouseUp);
+    };
 
     return (
-        <div className="flex flex-col w-full bg-black/40 backdrop-blur-xl border-t border-white/10 p-4">
-            <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-4">
-                    <span className="text-xs text-white/60 font-mono">
-                        {currentTime.toFixed(2)}s / {duration.toFixed(2)}s
-                    </span>
+        <div
+            className="flex flex-col w-full bg-[#111] border-t border-white/10 relative transition-all"
+            style={{ height: `${timelineHeight}px` }}
+        >
+            {/* Height Resize Handle */}
+            <div
+                className="absolute -top-1 left-0 right-0 h-2 cursor-row-resize z-50 hover:bg-blue-500/20 active:bg-blue-500/40 transition-colors"
+                onMouseDown={handleHeightResize}
+            />
+
+            {/* Toolbar */}
+            <div className="flex items-center justify-between px-4 py-2 border-b border-white/5 bg-black/40 backdrop-blur-md">
+                <div className="flex items-center gap-6">
+                    <div className="flex items-center gap-2">
+                        <span className="text-[11px] font-mono text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded border border-blue-500/20">
+                            {Math.floor((ghostTime ?? currentTime) / 60).toString().padStart(2, '0')}:
+                            {((ghostTime ?? currentTime) % 60).toFixed(2).padStart(5, '0')}
+                        </span>
+                        <span className="text-[11px] font-mono text-white/30">
+                            / {Math.floor(duration / 60).toString().padStart(2, '0')}:
+                            {(duration % 60).toFixed(2).padStart(5, '0')}
+                        </span>
+                    </div>
+
+                    <div className="flex items-center gap-1 bg-white/5 p-1 rounded-md border border-white/5">
+                        <button
+                            onClick={() => setTimelineScale(Math.max(10, timelineScale - 10))}
+                            className="p-1 rounded hover:bg-white/10 text-white/40 hover:text-white/80 transition-colors"
+                        >
+                            <Minus className="w-3 h-3" />
+                        </button>
+                        <div className="flex items-center gap-1 px-2 text-[10px] text-white/40 font-medium">
+                            <Search className="w-3 h-3" />
+                            <span>{Math.round((timelineScale / 50) * 100)}%</span>
+                        </div>
+                        <button
+                            onClick={() => setTimelineScale(Math.min(200, timelineScale + 10))}
+                            className="p-1 rounded hover:bg-white/10 text-white/40 hover:text-white/80 transition-colors"
+                        >
+                            <Plus className="w-3 h-3" />
+                        </button>
+                    </div>
+                </div>
+
+                <div className="flex items-center gap-2">
                     <button
                         onClick={handleAddZoom}
-                        className="text-[10px] px-2 py-1 bg-blue-500/20 hover:bg-blue-500/40 text-blue-400 border border-blue-500/30 rounded flex items-center gap-1 transition-colors"
+                        className="text-[10px] px-3 py-1.5 bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded shadow-lg shadow-blue-500/20 flex items-center gap-1.5 transition-all active:scale-95"
                     >
-                        + Zoom
+                        <Maximize2 className="w-3 h-3" />
+                        Add Zoom Effect
                     </button>
                 </div>
             </div>
 
+            <div className="flex flex-1 overflow-y-auto no-scrollbar relative">
+                {/* Track Headers (Left Sidebar) */}
+                <div className="w-48 bg-black/40 border-r border-white/10 flex flex-col shrink-0 sticky left-0 z-30 h-fit">
+                    {/* Header Spacer - Matches Time Ruler Height */}
+                    <div className="h-12 border-b border-white/10 bg-black/20" />
 
-            <div
-                className="relative bg-white/5 rounded-lg overflow-x-auto overflow-y-hidden border border-white/5 timeline-scrollbar"
-                onClick={handleTimelineClick}
-            >
-                <div className="relative min-w-full w-fit p-2 flex flex-col gap-2">
+                    {tracks.map(track => (
+                        <TrackHeader key={track.id} track={track} />
+                    ))}
+                    <button className="mt-2 mx-3 py-1.5 border border-dashed border-white/10 rounded-md text-[10px] text-white/30 hover:text-white/60 hover:border-white/20 transition-all flex items-center justify-center gap-1">
+                        <Plus className="w-3 h-3" />
+                        Add Track
+                    </button>
+                </div>
 
-                    {/* Scrubber Line */}
-                    <div
-                        className="absolute top-0 bottom-0 w-0.5 bg-blue-500 z-10 pointer-events-none transition-all duration-75"
-                        style={{ left: `${currentTime * 50}px` }}
-                    >
-                        <div className="absolute top-0 -left-1.5 w-3 h-3 bg-blue-500 rounded-full shadow-[0_0_10px_rgba(59,130,246,0.8)]" />
-                    </div>
+                {/* Track Lanes (Timeline) */}
+                <div
+                    ref={scrollContainerRef}
+                    className={`flex-1 relative overflow-x-auto overflow-y-hidden no-scrollbar bg-[#0a0a0a] ${isPanning ? 'cursor-grabbing' : 'cursor-default'}`}
+                    onClick={handleTimelineClick}
+                    onMouseDown={handleTimelineMouseDown}
+                >
+                    <div className="relative min-w-full" style={{ width: `${(duration + 2) * timelineScale}px` }}>
 
-                    <DndContext
-                        sensors={sensors}
-                        collisionDetection={closestCenter}
-                        onDragEnd={handleDragEnd}
-                    >
-                        <div className="flex items-center h-16 px-2 gap-1 relative border-b border-white/5">
-                            <SortableContext
-                                items={clips.map((c) => c.id)}
-                                strategy={horizontalListSortingStrategy}
-                            >
-                                {clips.map((clip) => (
-                                    <ClipCard key={clip.id} clip={clip} />
-                                ))}
-                            </SortableContext>
+                        {/* Time Markers - Sticky Top */}
+                        <div className="sticky top-0 h-12 border-b border-white/10 flex items-end bg-[#0a0a0a] z-40">
+                            {[...Array(Math.ceil(duration + 10))].map((_, i) => (
+                                <div
+                                    key={i}
+                                    className="absolute bottom-0 border-l border-white/10 flex flex-col justify-end"
+                                    style={{ left: `${i * timelineScale}px`, height: i % 5 === 0 ? '10px' : '5px' }}
+                                >
+                                    {i % 5 === 0 && (
+                                        <span className="absolute bottom-3 left-1 text-[8px] text-white/20 font-mono">
+                                            {i}s
+                                        </span>
+                                    )}
+                                </div>
+                            ))}
                         </div>
-                    </DndContext>
 
-                    {/* Zoom Track */}
-                    <div className="relative h-12 flex items-center px-2">
-                        <span className="absolute left-0 top-0 text-[8px] text-white/20 uppercase font-bold px-1 py-0.5 pointer-events-none">Zoom</span>
-                        {zoomEffects.map((effect) => (
+                        {/* Ghost Scrubber (Shadow) */}
+                        {ghostTime !== null && (
+                            <div className="absolute top-0 bottom-0 w-0.5 bg-blue-500/30 z-[45] pointer-events-none" style={{ left: `${ghostTime * timelineScale}px` }}>
+                                <div className="absolute top-0 -left-[6px] w-3 h-6 bg-blue-500/20 rounded-b-sm border border-blue-500/30 blur-[1px]" />
+                            </div>
+                        )}
+
+                        {/* Actual Scrubber Line */}
+                        <div
+                            className="absolute top-0 bottom-0 w-0.5 bg-blue-500 z-50 group/scrubber"
+                            style={{ left: `${currentTime * timelineScale}px` }}
+                        >
                             <div
-                                key={effect.id}
-                                className={`zoom-effect-card absolute h-8 rounded-md border text-[10px] flex items-center justify-center cursor-pointer transition-all ${selectedZoomEffectId === effect.id
-                                        ? 'bg-blue-500/40 border-blue-400 text-white'
-                                        : 'bg-blue-500/10 border-blue-500/30 text-blue-400'
-                                    }`}
-                                style={{
-                                    left: `${effect.start * 50 + 8}px`, // +8 for padding
-                                    width: `${effect.duration * 50}px`,
-                                }}
-                                onClick={(e) => {
+                                className="absolute top-0 -left-[8px] w-4 h-6 bg-blue-500 rounded-b-sm shadow-[0_0_15px_rgba(59,130,246,0.8)] flex items-center justify-center cursor-grab active:cursor-grabbing hover:scale-110 transition-all z-[60]"
+                                onMouseDown={(e) => {
+                                    e.preventDefault();
                                     e.stopPropagation();
-                                    setSelectedZoomEffectId(effect.id);
-                                    setSelectedClipId(null);
+
+                                    const scrollContainer = scrollContainerRef.current;
+                                    if (!scrollContainer) return;
+
+                                    document.body.classList.add('grabbing-scrubber');
+
+                                    const getTime = (clientX: number) => {
+                                        const rect = scrollContainer.getBoundingClientRect();
+                                        const x = clientX - rect.left + scrollContainer.scrollLeft;
+                                        return Math.max(0, x / timelineScale);
+                                    };
+
+                                    const onMouseMove = (moveEvent: MouseEvent) => {
+                                        const newTime = Math.min(getTime(moveEvent.clientX), duration);
+                                        if (isPlaying) {
+                                            setGhostTime(newTime);
+                                        } else {
+                                            setCurrentTime(newTime);
+                                        }
+                                    };
+
+                                    const onMouseUp = () => {
+                                        setGhostTime(null);
+                                        document.body.classList.remove('grabbing-scrubber');
+                                        window.removeEventListener('mousemove', onMouseMove);
+                                        window.removeEventListener('mouseup', onMouseUp);
+                                    };
+
+                                    window.addEventListener('mousemove', onMouseMove);
+                                    window.addEventListener('mouseup', onMouseUp);
                                 }}
                             >
-                                Zoom {effect.level}x
+                                <div className="w-[1px] h-3 bg-white/60" />
                             </div>
-                        ))}
+
+                            {/* Visual Glow Line */}
+                            <div className="absolute top-0 bottom-0 -left-1 -right-1 bg-blue-500/10 blur-[2px] pointer-events-none" />
+                        </div>
+
+                        {/* Tracks */}
+                        <div className="flex flex-col">
+                            {tracks.map(track => (
+                                <TrackLane
+                                    key={track.id}
+                                    track={track}
+                                    clips={clips}
+                                    zoomEffects={zoomEffects}
+                                />
+                            ))}
+                        </div>
                     </div>
                 </div>
             </div>
-
         </div>
     );
 };

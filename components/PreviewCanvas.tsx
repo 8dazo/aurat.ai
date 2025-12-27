@@ -59,9 +59,15 @@ export const PreviewCanvas = () => {
 
     // Sync Current Time
     useEffect(() => {
-        if (!movieRef.current || isPlaying) return;
-        movieRef.current.currentTime = currentTime;
-    }, [currentTime, isPlaying]);
+        if (!movieRef.current) return;
+
+        const diff = Math.abs(movieRef.current.currentTime - currentTime);
+        // Only sync if the difference is significant (manual seek)
+        // This avoids feedback loops during normal playback
+        if (diff > 0.1) {
+            movieRef.current.currentTime = currentTime;
+        }
+    }, [currentTime]);
 
     // Force redraw when zoom effects change while paused
     useEffect(() => {
@@ -88,21 +94,24 @@ export const PreviewCanvas = () => {
     const togglePlay = () => setIsPlaying(!isPlaying);
 
     return (
-        <div className="flex flex-col items-center gap-4 w-full max-w-4xl mx-auto">
-            <div className="relative aspect-video w-full bg-black rounded-xl overflow-hidden shadow-2xl border border-white/10 group">
+        <div className="flex flex-col items-center justify-center w-full h-full min-h-0 relative group">
+            <div className="relative aspect-video max-h-full w-auto bg-black/40 backdrop-blur-sm rounded-2xl border border-white/5 shadow-2xl overflow-hidden">
                 <canvas
                     ref={canvasRef}
                     width={1280}
                     height={720}
-                    className="w-full h-full object-contain"
+                    className="w-full h-full object-contain cursor-pointer"
                     onClick={togglePlay}
                 />
 
-                {/* Overlay Controls */}
-                <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                {/* Overlay Controls - Centered */}
+                <div className={`absolute inset-0 flex items-center justify-center transition-all duration-300 ${isPlaying ? 'opacity-0 group-hover:opacity-100' : 'opacity-100'} pointer-events-none`}>
                     <button
-                        className="w-16 h-16 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center pointer-events-auto hover:bg-white/30 transition-all transform hover:scale-110"
-                        onClick={togglePlay}
+                        className="w-20 h-20 rounded-full bg-white/10 backdrop-blur-xl border border-white/20 flex items-center justify-center pointer-events-auto hover:bg-white/20 hover:scale-110 active:scale-95 transition-all shadow-[0_0_50px_rgba(255,255,255,0.1)]"
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            togglePlay();
+                        }}
                     >
                         {isPlaying ? (
                             <Pause className="w-8 h-8 text-white fill-white" />
@@ -111,28 +120,6 @@ export const PreviewCanvas = () => {
                         )}
                     </button>
                 </div>
-            </div>
-
-            <div className="flex items-center gap-4 p-2 bg-white/5 backdrop-blur-md rounded-full border border-white/10">
-                <button
-                    onClick={() => {
-                        setIsPlaying(false);
-                        setCurrentTime(0);
-                    }}
-                    className="p-2 hover:bg-white/10 rounded-full transition-colors"
-                >
-                    <Square className="w-5 h-5 text-white/80 fill-white/80" />
-                </button>
-                <button
-                    onClick={togglePlay}
-                    className="p-3 bg-white text-black rounded-full hover:bg-white/90 transition-all transform active:scale-95"
-                >
-                    {isPlaying ? (
-                        <Pause className="w-6 h-6 fill-black" />
-                    ) : (
-                        <Play className="w-6 h-6 fill-black ml-0.5" />
-                    )}
-                </button>
             </div>
         </div>
     );
