@@ -2,6 +2,8 @@ import { FFmpeg } from '@ffmpeg/ffmpeg';
 import { fetchFile, toBlobURL } from '@ffmpeg/util';
 import { Clip, MediaClip, TextClip, ZoomEffect } from './types';
 import { createEtroMovie } from './etro-movie';
+import { useTimelineStore } from '../store/useTimelineStore';
+import { useCaptionStore } from '../store/useCaptionStore';
 
 let ffmpeg: FFmpeg | null = null;
 
@@ -30,7 +32,7 @@ export const exportVideo = async (
     if (duration === 0) throw new Error("Nothing to export");
 
     // Get movie dimensions from state
-    const { movieDimensions } = (window as any).useTimelineStore.getState();
+    const { movieDimensions } = useTimelineStore.getState();
     const { width: projectWidth, height: projectHeight } = movieDimensions;
 
     onProgress(5);
@@ -39,7 +41,7 @@ export const exportVideo = async (
     const mediaClips = clips.filter(
         (c) => c.type === 'video' || c.type === 'audio' || c.type === 'image'
     ) as MediaClip[];
-    const textClips = clips.filter(c => c.type === 'text') as TextClip[];
+    const textClips = clips.filter((c: any) => c.type === 'text') as TextClip[];
 
     for (const clip of mediaClips) {
         await ffmpeg.writeFile(clip.name, await fetchFile(clip.file));
@@ -81,6 +83,24 @@ export const exportVideo = async (
         filterComplex += `${lastStream}drawtext=text='${clip.text}':fontfile=roboto.ttf:fontsize=${clip.style.fontSize}:fontcolor=${color}:x=${xPos}:y=${yPos}:enable='between(t,${clip.start},${clip.start + clip.duration})'[${outName}];`;
         lastStream = `[${outName}]`;
     });
+
+
+    // Composition: Captions
+    const { captions, isCaptionEnabled, captionPosition } = useCaptionStore.getState();
+    if (isCaptionEnabled && captions.length > 0) {
+        captions.forEach((cap: any, i: number) => {
+            const outName = `capv${i}`;
+            const fontSize = Math.round(projectHeight * 0.06);
+            const boxPadding = Math.round(projectHeight * 0.02);
+            const yPos = captionPosition === 'top'
+                ? projectHeight * 0.15
+                : projectHeight * 0.85;
+
+            // Refined drawtext with background box and centered alignment
+            filterComplex += `${lastStream}drawtext=text='${cap.text.replace(/'/g, "'\\\\''")}':fontfile=roboto.ttf:fontsize=${fontSize}:fontcolor=white:x=(w-text_w)/2:y=${yPos}-text_h:box=1:boxcolor=black@0.7:boxborderw=${boxPadding}:enable='between(t,${cap.start},${cap.end})'[${outName}];`;
+            lastStream = `[${outName}]`;
+        });
+    }
 
 
     // 3. Zoom Segments

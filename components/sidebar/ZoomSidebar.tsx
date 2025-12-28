@@ -41,7 +41,7 @@ export const ZoomSidebar = () => {
                 const scale = Math.min(320 / movieDimensions.width, 180 / movieDimensions.height);
                 buffer.width = movieDimensions.width * scale;
                 buffer.height = movieDimensions.height * scale;
-                const bctx = buffer.getContext('2d');
+                const bctx = buffer.getContext('2d', { willReadFrequently: true });
                 if (bctx) {
                     bctx.drawImage(video, 0, 0, buffer.width, buffer.height);
                     setPreviewBuffer(buffer);
@@ -59,7 +59,7 @@ export const ZoomSidebar = () => {
     // Effect to render the canvas (background frame + overlay)
     useEffect(() => {
         if (!canvasRef.current || !selectedEffect) return;
-        const ctx = canvasRef.current.getContext('2d');
+        const ctx = canvasRef.current.getContext('2d', { willReadFrequently: true });
         if (!ctx) return;
 
         const { width, height } = canvasRef.current;

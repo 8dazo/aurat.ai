@@ -47,6 +47,23 @@ export interface Track {
     height: number;
 }
 
+export interface Caption {
+    id: string;
+    start: number;
+    end: number;
+    text: string;
+}
+
+export interface CaptionConfig {
+    fontSize: number;
+    fontFamily: string;
+    color: string;
+    backgroundColor: string;
+    borderRadius: number;
+    padding: number;
+    maxWidth: number;
+}
+
 export interface TimelineState {
     tracks: Track[];
     clips: Clip[];

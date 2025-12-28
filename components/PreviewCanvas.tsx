@@ -2,8 +2,10 @@
 
 import React, { useEffect, useRef } from 'react';
 import { useTimelineStore } from '../store/useTimelineStore';
+import { useCaptionStore } from '../store/useCaptionStore';
 import { createEtroMovie } from '../lib/etro-movie';
 import { Play, Pause, Square } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 export const PreviewCanvas = () => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -17,6 +19,9 @@ export const PreviewCanvas = () => {
     const zoomEffects = useTimelineStore((state) => state.zoomEffects);
     const movieDimensions = useTimelineStore((state) => state.movieDimensions);
 
+    // Captions state
+    const { captions, isCaptionEnabled, captionPosition, config } = useCaptionStore();
+
 
     // Initialize Etro Movie
     useEffect(() => {
@@ -26,14 +31,23 @@ export const PreviewCanvas = () => {
                 movieRef.current = null;
             }
 
-            movieRef.current = createEtroMovie(canvasRef.current, clips, zoomEffects, movieDimensions);
+            // Pre-initialize context with performance hint for frequent readbacks (getImageData)
+            canvasRef.current.getContext('2d', { willReadFrequently: true });
+
+            movieRef.current = createEtroMovie(canvasRef.current, clips, zoomEffects, movieDimensions, {
+                items: captions,
+                enabled: isCaptionEnabled,
+                position: captionPosition,
+                config,
+                currentTime
+            });
             movieRef.current.currentTime = currentTime;
             if (isPlaying) {
                 movieRef.current.play();
             }
 
             // Update store duration
-            const totalDuration = clips.reduce((acc, clip) => Math.max(acc, clip.start + clip.duration), 0);
+            const totalDuration = clips.reduce((acc: number, clip: any) => Math.max(acc, (clip.start || 0) + (clip.duration || 0)), 0);
             setDuration(totalDuration);
         }
 
@@ -43,7 +57,7 @@ export const PreviewCanvas = () => {
                 movieRef.current.pause();
             }
         };
-    }, [clips, setDuration, movieDimensions]); // Added movieDimensions dependency
+    }, [clips, setDuration, movieDimensions, captions, isCaptionEnabled, captionPosition, config]); // Added caption dependencies
 
 
 

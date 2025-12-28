@@ -8,7 +8,8 @@ import {
     Search,
     Plus,
     ChevronLeft,
-    ZoomIn
+    ZoomIn,
+    Languages
 } from 'lucide-react';
 
 import { useDispatch, useSelector } from 'react-redux';
@@ -28,6 +29,7 @@ import { PropertiesSidebar } from './PropertiesSidebar';
 import { FramesSidebar } from './FramesSidebar';
 import { TextSidebar } from './TextSidebar';
 import { ZoomSidebar } from './ZoomSidebar';
+import { CaptionSidebar } from './CaptionSidebar';
 import { cn } from '@/lib/utils';
 
 
@@ -36,6 +38,7 @@ const navItems = [
     { id: 'frames', icon: Layout, label: 'Frames' },
     { id: 'text', icon: Type, label: 'Text' },
     { id: 'zoom', icon: ZoomIn, label: 'Zoom' },
+    { id: 'caption', icon: Languages, label: 'Caption' },
 ];
 
 
@@ -54,6 +57,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 return TextSidebar;
             case 'zoom':
                 return ZoomSidebar;
+            case 'caption':
+                return CaptionSidebar;
             default:
 
                 return PropertiesSidebar;

@@ -17,6 +17,7 @@
     "@radix-ui/react-accordion": "^1.2.12",
     "@reduxjs/toolkit": "^2.11.2",
     "@types/ffmpeg.js": "^3.1.6",
+    "@xenova/transformers": "^2.17.2",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "etro": "^0.12.1",
