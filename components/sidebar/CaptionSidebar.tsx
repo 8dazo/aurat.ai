@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import { useTimelineStore } from '@/store/useTimelineStore';
 import { useCaptionStore } from '@/store/useCaptionStore';
 import { SidebarHeader, SidebarContent } from '@/components/ui/sidebar';
-import { Languages, Play, Settings, Type, Trash2, Check, Layout, AlignCenter, AlignJustify } from 'lucide-react';
+import { Languages, Play, Settings, Type, Trash2, Check, Layout, AlignCenter, AlignJustify, AlertCircle } from 'lucide-react';
 import { transcribeVideo } from '@/lib/transcription';
 import { cn } from '@/lib/utils';
 import { MediaClip } from '@/lib/types';
@@ -17,7 +17,8 @@ export const CaptionSidebar = () => {
         isCaptionEnabled,
         setIsCaptionEnabled,
         captionPosition,
-        setCaptionPosition
+        setCaptionPosition,
+        lastInvalidatedAt
     } = useCaptionStore();
 
     const [isProcessing, setIsProcessing] = useState(false);
@@ -25,19 +26,46 @@ export const CaptionSidebar = () => {
     const [processProgress, setProcessProgress] = useState(0);
 
     const handleProcessVideo = async () => {
-        const videoClip = clips.find(c => c.type === 'video') as MediaClip | undefined;
-        if (!videoClip || videoClip.type !== 'video') {
+        const videoClips = clips
+            .filter(c => c.type === 'video')
+            .sort((a, b) => a.start - b.start) as MediaClip[];
+
+        if (videoClips.length === 0) {
             alert('Please add a video to the timeline first.');
             return;
         }
 
         try {
             setIsProcessing(true);
-            const results = await transcribeVideo(videoClip.file, (status, progress) => {
-                setProcessStatus(status);
-                setProcessProgress(progress);
-            });
-            setCaptions(results);
+            let allCaptions = [];
+
+            for (let i = 0; i < videoClips.length; i++) {
+                const clip = videoClips[i];
+                setProcessStatus(`Transcribing segment ${i + 1}/${videoClips.length}...`);
+
+                const results = await transcribeVideo(
+                    clip.file,
+                    (status, progress) => {
+                        // Blend current segment progress with overall progress
+                        const overallProgress = (i + progress) / videoClips.length;
+                        setProcessProgress(overallProgress);
+                    },
+                    clip.startTimeInFile,
+                    clip.duration
+                );
+
+                // Offset caption timestamps to match timeline
+                const offsetResults = results.map(cap => ({
+                    ...cap,
+                    start: cap.start + clip.start,
+                    end: cap.end + clip.start,
+                    clipId: clip.id
+                }));
+
+                allCaptions.push(...offsetResults);
+            }
+
+            setCaptions(allCaptions);
             setIsCaptionEnabled(true);
         } catch (error) {
             console.error('Transcription failed:', error);
@@ -61,6 +89,19 @@ export const CaptionSidebar = () => {
             </SidebarHeader>
 
             <SidebarContent className="p-4 space-y-6">
+                {/* Invalidation Notice */}
+                {lastInvalidatedAt && captions.length === 0 && (
+                    <div className="p-3 rounded-lg bg-orange-500/10 border border-orange-500/20 flex gap-3 animate-in fade-in slide-in-from-top-2 duration-300">
+                        <AlertCircle className="w-4 h-4 text-orange-400 shrink-0 mt-0.5" />
+                        <div className="space-y-1">
+                            <p className="text-[11px] font-medium text-orange-200 leading-tight">Timeline Changed</p>
+                            <p className="text-[10px] text-orange-300/80 leading-normal">
+                                Captions were removed to stay in sync with your new edits. Please re-generate them.
+                            </p>
+                        </div>
+                    </div>
+                )}
+
                 {/* Process Button */}
                 <div className="space-y-4">
                     <button

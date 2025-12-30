@@ -6,6 +6,7 @@ interface CaptionState {
     isCaptionEnabled: boolean;
     captionPosition: 'top' | 'bottom';
     config: CaptionConfig;
+    lastInvalidatedAt: string | null;
 }
 
 interface CaptionActions {
@@ -13,6 +14,7 @@ interface CaptionActions {
     setIsCaptionEnabled: (enabled: boolean) => void;
     setCaptionPosition: (position: 'top' | 'bottom') => void;
     updateConfig: (updates: Partial<CaptionConfig>) => void;
+    clearCaptions: (reason?: string) => void;
 }
 
 const DEFAULT_CONFIG: CaptionConfig = {
@@ -30,9 +32,18 @@ export const useCaptionStore = create<CaptionState & CaptionActions>((set) => ({
     isCaptionEnabled: false,
     captionPosition: 'bottom',
     config: DEFAULT_CONFIG,
+    lastInvalidatedAt: null,
 
-    setCaptions: (captions) => set({ captions }),
+    setCaptions: (captions) => set({ captions, lastInvalidatedAt: null }),
     setIsCaptionEnabled: (isCaptionEnabled) => set({ isCaptionEnabled }),
     setCaptionPosition: (captionPosition) => set({ captionPosition }),
     updateConfig: (updates) => set((state) => ({ config: { ...state.config, ...updates } })),
+
+    clearCaptions: (reason?: string) => set((state) => {
+        if (state.captions.length === 0) return state;
+        return {
+            captions: [],
+            lastInvalidatedAt: reason || new Date().toISOString()
+        };
+    }),
 }));

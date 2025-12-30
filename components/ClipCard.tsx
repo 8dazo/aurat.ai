@@ -2,15 +2,21 @@
 
 import React, { useState, useEffect } from 'react';
 import { Clip, MediaClip, Track } from '../lib/types';
-import { Film, Music, Type, Image as ImageIcon, X } from 'lucide-react';
+import { Film, Music, Type, Image as ImageIcon, X, GripVertical } from 'lucide-react';
 import { useTimelineStore } from '../store/useTimelineStore';
+import { useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import { cn } from '../lib/utils';
 
 interface ClipCardProps {
     clip: Clip;
+    isMagnetic?: boolean;
 }
 
-export const ClipCard = ({ clip }: ClipCardProps) => {
+export const ClipCard = ({ clip, isMagnetic }: ClipCardProps) => {
     const removeClip = useTimelineStore((state) => state.removeClip);
+    const deleteClip = useTimelineStore((state) => state.deleteClip);
+    const trimClip = useTimelineStore((state) => state.trimClip);
     const updateClip = useTimelineStore((state) => state.updateClip);
     const selectedClipId = useTimelineStore((state) => state.selectedClipId);
     const setSelectedClipId = useTimelineStore((state) => state.setSelectedClipId);
@@ -18,18 +24,34 @@ export const ClipCard = ({ clip }: ClipCardProps) => {
 
     const isSelected = selectedClipId === clip.id;
 
-    // Local state for smooth dragging/resizing
+    const {
+        attributes,
+        listeners,
+        setNodeRef,
+        transform,
+        transition,
+        isDragging: isSortDragging,
+    } = useSortable({ id: clip.id });
+
+    const style = {
+        transform: CSS.Transform.toString(transform),
+        transition,
+        left: `${clip.start * timelineScale}px`,
+        width: `${clip.duration * timelineScale}px`,
+    };
+
+    // Transition for layout changes
     const [localStart, setLocalStart] = useState(clip.start);
     const [localDuration, setLocalDuration] = useState(clip.duration);
-    const [isDragging, setIsDragging] = useState(false);
+    const [isInteracting, setIsInteracting] = useState(false);
     const [resizeType, setResizeType] = useState<'left' | 'right' | null>(null);
 
     useEffect(() => {
-        if (!isDragging && !resizeType) {
+        if (!isInteracting && !resizeType) {
             setLocalStart(clip.start);
             setLocalDuration(clip.duration);
         }
-    }, [clip.start, clip.duration, isDragging, resizeType]);
+    }, [clip.start, clip.duration, isInteracting, resizeType]);
 
     // Improved mouse handling with window listeners
     const startInteraction = (e: React.MouseEvent, type: 'drag' | 'left' | 'right') => {
@@ -48,8 +70,9 @@ export const ClipCard = ({ clip }: ClipCardProps) => {
             const deltaTime = deltaX / timelineScale;
 
             if (type === 'drag') {
+                if (isMagnetic) return; // Reordering is handled by @dnd-kit sensors
+                setIsInteracting(true);
                 setLocalStart(Math.max(0, initialStart + deltaTime));
-                setIsDragging(true);
             } else if (type === 'left') {
                 const newStart = Math.max(0, initialStart + deltaTime);
                 const newDuration = Math.max(0.1, initialDuration - (newStart - initialStart));
@@ -66,21 +89,17 @@ export const ClipCard = ({ clip }: ClipCardProps) => {
             window.removeEventListener('mousemove', onMouseMove);
             window.removeEventListener('mouseup', onMouseUp);
 
-            setIsDragging(false);
+            setIsInteracting(false);
             setResizeType(null);
 
-            // Calculate final values based on original clip properties and total delta
+            // Calculate final values and ripple
             const finalDeltaX = upEvent.clientX - startX;
             const finalDeltaTime = finalDeltaX / timelineScale;
 
-            if (type === 'drag') {
-                updateClip(clip.id, { start: Math.max(0, clip.start + finalDeltaTime) });
-            } else if (type === 'left') {
-                const newStart = Math.max(0, clip.start + finalDeltaTime);
-                const newDuration = Math.max(0.1, clip.duration - (newStart - clip.start));
-                updateClip(clip.id, { start: newStart, duration: newDuration });
+            if (type === 'left') {
+                trimClip(clip.id, 'left', finalDeltaTime);
             } else if (type === 'right') {
-                updateClip(clip.id, { duration: Math.max(0.1, clip.duration + finalDeltaTime) });
+                trimClip(clip.id, 'right', finalDeltaTime);
             }
         };
 
@@ -98,20 +117,30 @@ export const ClipCard = ({ clip }: ClipCardProps) => {
 
     return (
         <div
-            className={`absolute h-[90%] top-[5%] shrink-0 rounded-md p-2 flex flex-col justify-between border select-none transition-all group ${isSelected
-                ? 'bg-white/10 border-blue-400 shadow-[0_0_15px_rgba(59,130,246,0.5)] z-20'
-                : 'bg-white/5 border-white/10 z-10 hover:bg-white/10'
-                } ${clip.type === 'video' ? 'cursor-default' : (isDragging ? 'cursor-grabbing' : 'cursor-grab')} `}
-            style={{
-                left: `${localStart * timelineScale}px`,
-                width: `${localDuration * timelineScale}px`,
-                transition: isDragging || resizeType ? 'none' : 'all 0.2s',
+            ref={setNodeRef}
+            style={style}
+            className={cn(
+                "absolute h-[90%] top-[5%] shrink-0 rounded-md p-2 flex flex-col justify-between border select-none group",
+                isSelected
+                    ? "bg-white/10 border-blue-400 shadow-[0_0_15px_rgba(59,130,246,0.5)] z-20"
+                    : "bg-white/5 border-white/10 z-10 hover:bg-white/10",
+                isSortDragging ? "opacity-50 scale-95" : "opacity-100 scale-100",
+                isMagnetic ? "cursor-default" : (isInteracting ? "cursor-grabbing" : "cursor-grab"),
+                !isInteracting && !resizeType && "transition-all duration-200"
+            )}
+            onMouseDown={(e) => {
+                setSelectedClipId(clip.id);
+                if (!isMagnetic) startInteraction(e, 'drag');
             }}
-            onMouseDown={(e) => startInteraction(e, 'drag')}
+            {...attributes}
+            {...(isMagnetic ? listeners : {})}
         >
             <div className="flex items-center justify-between pointer-events-none relative z-10">
                 <div className="flex items-center gap-1.5 overflow-hidden">
-                    <Icon className={`w-3.5 h-3.5 ${isSelected ? 'text-blue-400' : 'text-white/40'} `} />
+                    {isMagnetic && (
+                        <GripVertical className="w-3 h-3 text-white/20 group-hover:text-white/40 -ml-1 transition-colors" />
+                    )}
+                    <Icon className={cn("w-3.5 h-3.5", isSelected ? "text-blue-400" : "text-white/40")} />
                     <span className="text-[10px] text-white/80 truncate font-medium">
                         {(clip as MediaClip).name || 'Text Layer'}
                     </span>
@@ -121,7 +150,7 @@ export const ClipCard = ({ clip }: ClipCardProps) => {
                     <button
                         onClick={(e) => {
                             e.stopPropagation();
-                            removeClip(clip.id);
+                            deleteClip(clip.id);
                         }}
                         className="pointer-events-auto p-1 rounded-full hover:bg-white/20 transition-colors"
                     >

@@ -4,7 +4,7 @@ import React, { useRef, useState } from 'react';
 import { useTimelineStore } from '../store/useTimelineStore';
 import { TrackHeader } from './TrackHeader';
 import { TrackLane } from './TrackLane';
-import { Plus, Maximize2, Minus, Search } from 'lucide-react';
+import { Plus, Maximize2, Minus, Search, Scissors, Trash2, ArrowLeftToLine, ArrowRightToLine } from 'lucide-react';
 
 export const Timeline = () => {
     const tracks = useTimelineStore((state) => state.tracks);
@@ -20,6 +20,13 @@ export const Timeline = () => {
     const setSelectedClipId = useTimelineStore((state) => state.setSelectedClipId);
     const setSelectedZoomEffectId = useTimelineStore((state) => state.setSelectedZoomEffectId);
     const addZoomEffect = useTimelineStore((state) => state.addZoomEffect);
+    const addClip = useTimelineStore((state) => state.addClip);
+    const cutClip = useTimelineStore((state) => state.cutClip);
+    const deleteClip = useTimelineStore((state) => state.deleteClip);
+    const selectedClipId = useTimelineStore((state) => state.selectedClipId);
+    const setMovieDimensions = useTimelineStore((state) => state.setMovieDimensions);
+
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
     const scrollContainerRef = useRef<HTMLDivElement>(null);
     const [isResizingHeight, setIsResizingHeight] = useState(false);
@@ -90,6 +97,91 @@ export const Timeline = () => {
         setSelectedZoomEffectId(id);
     };
 
+    const getClipAtTime = (time: number) => {
+        // Find video/audio clip at playhead
+        const mediaClip = clips.find(c =>
+            (c.type === 'video' || c.type === 'audio') &&
+            time >= c.start &&
+            time < c.start + c.duration
+        );
+        if (mediaClip) return mediaClip;
+
+        // Fallback to any clip at playhead
+        return clips.find(c => time >= c.start && time < c.start + c.duration);
+    };
+
+    const handleCut = () => {
+        const targetId = selectedClipId || getClipAtTime(currentTime)?.id;
+        if (targetId) {
+            cutClip(targetId, currentTime);
+        }
+    };
+
+    const handleDelete = () => {
+        const targetId = selectedClipId || getClipAtTime(currentTime)?.id;
+        if (targetId) {
+            deleteClip(targetId);
+        }
+    };
+
+    const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const files = e.target.files;
+        if (!files) return;
+
+        for (let i = 0; i < files.length; i++) {
+            const file = files[i];
+            const url = URL.createObjectURL(file);
+            const type = file.type.startsWith('video') ? 'video' : file.type.startsWith('audio') ? 'audio' : 'image';
+
+            let duration = 5;
+            let width = 0;
+            let height = 0;
+
+            if (type === 'video' || type === 'audio') {
+                const result = await new Promise<{ duration: number; width: number; height: number }>((resolve) => {
+                    const el = document.createElement(type === 'video' ? 'video' : 'audio');
+                    el.src = url;
+                    el.onloadedmetadata = () => {
+                        resolve({
+                            duration: el.duration,
+                            width: (el as HTMLVideoElement).videoWidth || 0,
+                            height: (el as HTMLVideoElement).videoHeight || 0
+                        });
+                    };
+                });
+                duration = result.duration;
+                width = result.width;
+                height = result.height;
+            } else if (type === 'image') {
+                const result = await new Promise<{ width: number; height: number }>((resolve) => {
+                    const img = new Image();
+                    img.onload = () => resolve({ width: img.width, height: img.height });
+                    img.src = url;
+                });
+                width = result.width;
+                height = result.height;
+            }
+
+            if (clips.length === 0 && (type === 'video' || type === 'image') && width > 0 && height > 0) {
+                setMovieDimensions({ width, height });
+            }
+
+            addClip({
+                id: crypto.randomUUID(),
+                type: type as any,
+                trackId: '',
+                start: 0,
+                duration,
+                startTimeInFile: 0,
+                file,
+                url,
+                name: file.name,
+                width: width || undefined,
+                height: height || undefined,
+            });
+        }
+    };
+
     const handleHeightResize = (e: React.MouseEvent) => {
         e.preventDefault();
         setIsResizingHeight(true);
@@ -157,6 +249,51 @@ export const Timeline = () => {
                 </div>
 
                 <div className="flex items-center gap-2">
+                    <div className="h-6 w-[1px] bg-white/10 mx-2" />
+
+                    <button
+                        onClick={handleCut}
+                        disabled={!selectedClipId && !getClipAtTime(currentTime)}
+                        className="p-1.5 rounded hover:bg-white/10 text-white/40 hover:text-white/80 transition-colors disabled:opacity-20 disabled:cursor-not-allowed group relative"
+                        title="Cut Clip (Split)"
+                    >
+                        <Scissors className="w-4 h-4" />
+                        <span className="absolute -top-8 left-1/2 -translate-x-1/2 bg-black text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none border border-white/10">
+                            Split Clip
+                        </span>
+                    </button>
+
+                    <button
+                        onClick={handleDelete}
+                        disabled={!selectedClipId && !getClipAtTime(currentTime)}
+                        className="p-1.5 rounded hover:bg-red-500/20 text-white/40 hover:text-red-400 transition-colors disabled:opacity-20 disabled:cursor-not-allowed group relative"
+                        title="Delete Clip"
+                    >
+                        <Trash2 className="w-4 h-4" />
+                        <span className="absolute -top-8 left-1/2 -translate-x-1/2 bg-black text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none border border-white/10">
+                            Delete
+                        </span>
+                    </button>
+
+                    <div className="h-6 w-[1px] bg-white/10 mx-2" />
+
+                    <input
+                        type="file"
+                        ref={fileInputRef}
+                        onChange={handleFileChange}
+                        multiple
+                        className="hidden"
+                        accept="video/*,audio/*,image/*"
+                    />
+
+                    <button
+                        onClick={() => fileInputRef.current?.click()}
+                        className="text-[10px] px-3 py-1.5 bg-white/5 hover:bg-white/10 text-white/80 font-semibold rounded border border-white/10 flex items-center gap-1.5 transition-all active:scale-95"
+                    >
+                        <Plus className="w-3 h-3" />
+                        Add Clip
+                    </button>
+
                     <button
                         onClick={handleAddZoom}
                         className="text-[10px] px-3 py-1.5 bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded shadow-lg shadow-blue-500/20 flex items-center gap-1.5 transition-all active:scale-95"

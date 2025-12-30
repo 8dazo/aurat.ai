@@ -52,6 +52,7 @@ export interface Caption {
     start: number;
     end: number;
     text: string;
+    clipId?: string; // Links this caption to a specific clip
 }
 
 export interface CaptionConfig {

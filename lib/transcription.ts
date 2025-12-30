@@ -2,7 +2,11 @@ import { fetchFile } from '@ffmpeg/util';
 import { getFFmpeg } from './ffmpeg-export';
 import { Caption } from './types';
 
-export const extractAudio = async (file: File): Promise<Uint8Array> => {
+export const extractAudio = async (
+    file: File,
+    startTime: number = 0,
+    duration?: number
+): Promise<Uint8Array> => {
     const ffmpeg = await getFFmpeg();
     const inputName = 'input_for_audio' + Math.random().toString(36).substring(7);
     const outputName = 'output.wav';
@@ -10,13 +14,17 @@ export const extractAudio = async (file: File): Promise<Uint8Array> => {
     await ffmpeg.writeFile(inputName, await fetchFile(file));
 
     // Extract audio to 16kHz mono wav (required by Whisper)
-    await ffmpeg.exec([
-        '-i', inputName,
+    const args = ['-i', inputName];
+    if (startTime > 0) args.push('-ss', startTime.toString());
+    if (duration !== undefined) args.push('-t', duration.toString());
+    args.push(
         '-ar', '16000',
         '-ac', '1',
         '-c:a', 'pcm_s16le',
         outputName
-    ]);
+    );
+
+    await ffmpeg.exec(args);
 
     const data = await ffmpeg.readFile(outputName);
 
@@ -29,10 +37,12 @@ export const extractAudio = async (file: File): Promise<Uint8Array> => {
 
 export const transcribeVideo = async (
     file: File,
-    onProgress: (status: string, progress: number) => void
+    onProgress: (status: string, progress: number) => void,
+    startTime: number = 0,
+    duration?: number
 ): Promise<Caption[]> => {
     onProgress('Extracting audio...', 0);
-    const audioData = await extractAudio(file);
+    const audioData = await extractAudio(file, startTime, duration);
 
     // Map Uint8Array to Float32Array
     const audioBuffer = new Int16Array(audioData.buffer);
